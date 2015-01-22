@@ -2,7 +2,7 @@ Elevator server
 c 2013
 epost: leohegge@stud.ntnu.no, sindreka@stud.ntnu.no and kulia@stud.ntnu.no
 
-By Leo Hauge, Sindre Karlsen and Geir Kulia. 
+By Aleksander Wasaznik, Leo Hauge, Sindre Karlsen and Geir Kulia. 
 
 To start the server in TTY or other terminals, start the start_server.sh.
 The source code for the server can be found in server_heis.py.
