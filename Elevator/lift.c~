@@ -1,0 +1,185 @@
+// Test functions for libComedi Elevator control. Connects all buttons and
+// lights. Can be used for testing an elevator, or as an example of use of the
+// drivers.
+//
+// 2008 Martin Korsgaard
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <assert.h>
+#include <unistd.h>
+#include <signal.h>
+#include <time.h>
+
+#include "elev.h"
+int speed;
+int floornow;
+int a;
+bool stop = 0;
+int matrise[3][4] = {{0}};
+bool obst;
+
+// Callback function that handles the elevator reaching a floor
+static void signal_floor_sensor(int floor, int value)
+{
+    elev_set_floor_indicator(floor);
+	floornow = floor;
+    //if (floor == 0) 
+		//elev_set_speed(1000);
+    //else if (floor == 3)
+		//elev_set_speed(-1000);
+
+    printf(__FILE__ ": Floor %d %s.\n", floor+1, value ? "arrive" : "depart");
+}
+
+
+
+// Callback for elevator buttons being pushed.
+static void signal_button_pushed(int floor, int dir)	//denne funksjonen må brukes til å fikse problemet med knappene(antar jeg...)
+{
+    static int lamps[3][4] = {{0}};
+
+    lamps[dir][floor] ^= 1;				//regned med denne linje, og denne fuknsjonen kan løse alle problemer!
+	elev_set_button_lamp(dir, floor, lamps[dir][floor]);
+
+//??
+for (int x = 0; x <3; x += 1){
+for (int y = 0; y < 4; y += 1){
+matrise[x][y] = lamps[x][y];
+}
+}
+//??
+
+
+	printf(__FILE__ ": Button %s pushed for floor %d.\n", dir==0?"CALL UP":dir==1?"CALL DOWN":"COMMAND", floor+1);
+}
+
+
+
+// Callback for stop.
+static void signal_stop(int dummy, int dummy2)
+{
+    static int lamp = 0;
+    lamp ^= 1;
+	stop = !stop;
+	elev_set_stop_lamp(lamp);
+	printf(__FILE__ ": Stop button pushed!\n");
+}
+
+
+
+// Callback for obstruction. Sets the stop lamp.
+static void signal_obstruction(int dummy, int value)
+{
+    elev_set_door_open_lamp(value);
+	obst = value;
+	printf(__FILE__ ": Obstruction switch flipped!\n");
+
+}
+
+
+void ctrlc(int x)
+{
+    elev_set_speed(0);
+					// skriv noe her!
+    exit(0);
+}
+
+int main()
+{
+	// Initialize hardware
+	if (!elev_init()) {
+		printf(__FILE__ ": Unable to initialize elevator hardware.\n");
+		exit (1);
+	}
+	
+    signal(SIGINT, ctrlc);
+
+	elev_register_callback(SIGNAL_TYPE_CALL_UP, &signal_button_pushed);
+	elev_register_callback(SIGNAL_TYPE_CALL_DOWN, &signal_button_pushed);
+	elev_register_callback(SIGNAL_TYPE_COMMAND, &signal_button_pushed);
+	elev_register_callback(SIGNAL_TYPE_SENSOR, &signal_floor_sensor);
+	elev_register_callback(SIGNAL_TYPE_STOP, &signal_stop);
+	elev_register_callback(SIGNAL_TYPE_OBSTR, &signal_obstruction);
+	
+	elev_reset_all_lamps();
+			// antall heiser
+			// Må kjøre på flere program, et program for hver heis? Kordan skal det foregå?
+	bool list[4] = {1,0,0,0};
+	bool opp = 1;
+	elev_set_speed(-speed);
+	elev_enable_callbacks();
+printf ("%d\n",floornow);
+	while (1){
+		printf ("Floornow %d\n",floornow);
+		printf ("list= %d%d%d%d \n",list[0],list[1],list[2],list[3]);
+		if (stop || obst){			//stopper om du har trykket på stoppknappen, eller forstyrret heisen.
+		printf ("stop\n");
+		elev_set_speed(0);}		
+		else if (list[floornow]==1){
+		printf ("du har nådd rett etasje\n");
+	    	elev_set_speed(0);
+		elev_set_door_open_lamp(1);
+		sleep(1);			//Åpne dør!
+		elev_set_door_open_lamp(0);
+		list[floornow]=0;
+		printf ("%d\n",list[floornow]);}
+
+		else{
+		a = 0;
+			if (opp){
+			printf ("opp\n");
+				for (int i = floornow; i < 4; i++){
+				printf ("i=%d",i);
+				printf ("  list[i]=%d\n",list[i]);
+				if (list[i]==1){
+				printf("Endrer hastigheten\n");
+					elev_set_speed(speed);
+					a +=1;
+				}}
+			}
+			else if (!opp){
+				printf ("ned\n");
+				for (int i = floornow; i > -1; i--){
+				printf ("i=%d",i);
+				printf ("  list[i]=%d\n",list[i]);
+				if (list[i]==1){
+					elev_set_speed(-speed);
+					a+=1;}}}}
+if (a==0)
+	opp = !opp;
+
+
+for (int aa = 0; aa < 4; aa++){
+if	(matrise[2][aa]==1){
+		list[aa] =1;
+		matrise[3][aa]=0;}}	//Feilen ligger i at matrisen blir oppdatert til å bli 
+					// 1 så lenge lapmen lyser, må få dn til å bli skrudd av på en måte
+					//lampene skal være på helt til etasjen er besøkt!
+		
+// Sjekke hvilke variabler som endrer seg når du trykker på heispanelet, og bruke de til å bygge på listen, 
+for (int x = 0; x <3; x += 1){
+for (int y = 0; y < 4; y += 1){
+printf ("%d",matrise[x][y]);
+	//nederste linje er inne i heisen, resten er utenfor
+}
+printf ("\n");
+}
+
+sleep(1);
+	
+
+	} ;
+
+	
+	return 0;
+}
+
+
+	// Heisen tar imot bestillinger, stopper når det ikke er noen bestillinger, Stopper ved stoppknapp. Knapper som lyser er problemet nå.
+	// Lysene skal skru seg av når man kommer til etasjen, og skru seg på når du trykker på knappen.
+
+
+
+
